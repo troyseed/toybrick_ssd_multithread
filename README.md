@@ -1,5 +1,5 @@
 # toybrick_ssd_multithread
-toybrick rknn multithread c demo frame work.
+toybrick rknn multithread c demo framework.
 notice: This test is only can build on target devices(toybrick prod).
 
 # pakages dependency
