@@ -43,7 +43,7 @@ Scalar colorArray[10] = {
 	Scalar(255, 0, 0, 255),
 };
 
-float MIN_SCORE = 0.4f;
+float MIN_SCORE = 0.6f;
 float NMS_THRESHOLD = 0.45f;
 
 const char *get_valid_file(const char *file)
@@ -123,33 +123,33 @@ float expit(float x)
 	return (float)(1.0 / (1.0 + exp(-x)));
 }
 
-void decodeCenterSizeBoxes(float *predictions, float (*boxPriors)[NUM_RESULTS])
+void decodeCenterSizeBox(float *predictions, float (*boxPriors)[NUM_RESULTS], int index)
 {
+	int base = index * 4;
 
-	for (int i = 0; i < NUM_RESULTS; ++i) {
-		float ycenter =
-		    predictions[i * 4 + 0] / Y_SCALE * boxPriors[2][i] +
-		    boxPriors[0][i];
-		float xcenter =
-		    predictions[i * 4 + 1] / X_SCALE * boxPriors[3][i] +
-		    boxPriors[1][i];
-		float h =
-		    (float)exp(predictions[i * 4 + 2] / H_SCALE) *
-		    boxPriors[2][i];
-		float w =
-		    (float)exp(predictions[i * 4 + 3] / W_SCALE) *
-		    boxPriors[3][i];
+	float ycenter =
+	    predictions[base + 0] / Y_SCALE * boxPriors[2][index] +
+	    boxPriors[0][index];
+	float xcenter =
+	    predictions[base + 1] / X_SCALE * boxPriors[3][index] +
+	    boxPriors[1][index];
+	float h =
+	    (float)exp(predictions[base + 2] / H_SCALE) *
+	    boxPriors[2][index];
+	float w =
+	    (float)exp(predictions[base + 3] / W_SCALE) *
+	    boxPriors[3][index];
 
-		float ymin = ycenter - h / 2.0f;
-		float xmin = xcenter - w / 2.0f;
-		float ymax = ycenter + h / 2.0f;
-		float xmax = xcenter + w / 2.0f;
+	float ymin = ycenter - h / 2.0f;
+	float xmin = xcenter - w / 2.0f;
+	float ymax = ycenter + h / 2.0f;
+	float xmax = xcenter + w / 2.0f;
 
-		predictions[i * 4 + 0] = ymin;
-		predictions[i * 4 + 1] = xmin;
-		predictions[i * 4 + 2] = ymax;
-		predictions[i * 4 + 3] = xmax;
-	}
+	predictions[base + 0] = ymin;
+	predictions[base + 1] = xmin;
+	predictions[base + 2] = ymax;
+	predictions[base + 3] = xmax;
+
 }
 
 int scaleToInputSize(float *outputClasses, int (*output)[NUM_RESULTS],
@@ -164,13 +164,14 @@ int scaleToInputSize(float *outputClasses, int (*output)[NUM_RESULTS],
 
 		// Skip the first catch-all class.
 		for (int j = 1; j < numClasses; ++j) {
-			float score = expit(outputClasses[i * numClasses + j]);
+			float score = outputClasses[i * numClasses + j];
 			if (score > topClassScore) {
 				topClassScoreIndex = j;
 				topClassScore = score;
 			}
 		}
 
+		topClassScore = expit(topClassScore);
 		if (topClassScore >= MIN_SCORE) {
 			output[0][validCount] = i;
 			output[1][validCount] = topClassScoreIndex;
@@ -232,10 +233,11 @@ int post_process(void *data, cv::Mat & img, float fps,
 	float *predictions = (float *)out_data->out[1];
 	float *outputClasses = (float *)out_data->out[0];
 	if (predictions && outputClasses) {
-		decodeCenterSizeBoxes(predictions, ssd->boxPriors);
-
 		int validCount =
 		    scaleToInputSize(outputClasses, output, NUM_CLASSES);
+
+		for (int i; i < validCount; i++)
+			decodeCenterSizeBox(predictions, ssd->boxPriors, output[0][i]);
 
 		if (validCount < 100) {
 			/* detect nest box */
